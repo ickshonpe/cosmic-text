@@ -13,7 +13,7 @@ use cosmic::{
         widget::{self, tree, Widget},
         Padding, {Color, Element, Length, Point, Rectangle, Shell, Size},
     },
-    theme::Theme,
+    theme::Theme, font::FONT_SEMIBOLD,
 };
 use cosmic_text::{Action, Edit, SwashCache};
 use std::{cmp, sync::Mutex, time::Instant};
@@ -92,7 +92,7 @@ where
 
         //TODO: allow lazy shape
         let mut editor = self.editor.lock().unwrap();
-        editor.buffer_mut().shape_until(i32::max_value());
+        editor.buffer_mut().shape_until(font_system, i32::max_value());
 
         let mut layout_lines = 0;
         for line in editor.buffer().lines.iter() {
@@ -163,15 +163,16 @@ where
             - self.padding.horizontal() as i32;
         let view_h = cmp::min(viewport.height as i32, layout.bounds().height as i32)
             - self.padding.vertical() as i32;
-        editor.buffer_mut().set_size(view_w, view_h);
+        editor.buffer_mut().set_size(font_system, view_w, view_h);
 
-        editor.shape_as_needed();
+        editor.shape_as_needed(font_system);
 
         let instant = Instant::now();
 
         let mut pixels = vec![0; view_w as usize * view_h as usize * 4];
 
         editor.draw(
+            font_system,
             &mut state.cache.lock().unwrap(),
             text_color,
             |x, y, w, h, color| {
@@ -223,6 +224,7 @@ where
 
     fn on_event(
         &mut self,
+        font_system: &mut FontSystem,
         tree: &mut widget::Tree,
         event: Event,
         layout: Layout<'_>,
@@ -241,62 +243,62 @@ where
                 modifiers,
             }) => match key_code {
                 KeyCode::Left => {
-                    editor.action(Action::Left);
+                    editor.action(font_system,Action::Left);
                     status = Status::Captured;
                 }
                 KeyCode::Right => {
-                    editor.action(Action::Right);
+                    editor.action(font_system,Action::Right);
                     status = Status::Captured;
                 }
                 KeyCode::Up => {
-                    editor.action(Action::Up);
+                    editor.action(font_system,Action::Up);
                     status = Status::Captured;
                 }
                 KeyCode::Down => {
-                    editor.action(Action::Down);
+                    editor.action(font_system,Action::Down);
                     status = Status::Captured;
                 }
                 KeyCode::Home => {
-                    editor.action(Action::Home);
+                    editor.action(font_system,Action::Home);
                     status = Status::Captured;
                 }
                 KeyCode::End => {
-                    editor.action(Action::End);
+                    editor.action(font_system,Action::End);
                     status = Status::Captured;
                 }
                 KeyCode::PageUp => {
-                    editor.action(Action::PageUp);
+                    editor.action(font_system,Action::PageUp);
                     status = Status::Captured;
                 }
                 KeyCode::PageDown => {
-                    editor.action(Action::PageDown);
+                    editor.action(font_system,Action::PageDown);
                     status = Status::Captured;
                 }
                 KeyCode::Escape => {
-                    editor.action(Action::Escape);
+                    editor.action(font_system,Action::Escape);
                     status = Status::Captured;
                 }
                 KeyCode::Enter => {
-                    editor.action(Action::Enter);
+                    editor.action(font_system,Action::Enter);
                     status = Status::Captured;
                 }
                 KeyCode::Backspace => {
-                    editor.action(Action::Backspace);
+                    editor.action(font_system,Action::Backspace);
                     status = Status::Captured;
                 }
                 KeyCode::Delete => {
-                    editor.action(Action::Delete);
+                    editor.action(font_system,Action::Delete);
                     status = Status::Captured;
                 }
                 _ => (),
             },
             Event::Keyboard(KeyEvent::CharacterReceived(character)) => {
-                editor.action(Action::Insert(character));
+                editor.action(font_system,Action::Insert(character));
                 status = Status::Captured;
             }
             Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => {
                 if layout.bounds().contains(cursor_position) {
-                    editor.action(Action::Click {
+                    editor.action(font_system,Action::Click {
                         x: (cursor_position.x - layout.bounds().x) as i32
                             - self.padding.left as i32,
                         y: (cursor_position.y - layout.bounds().y) as i32 - self.padding.top as i32,
@@ -311,7 +313,7 @@ where
             }
             Event::Mouse(MouseEvent::CursorMoved { .. }) => {
                 if state.is_dragging {
-                    editor.action(Action::Drag {
+                    editor.action(font_system,Action::Drag {
                         x: (cursor_position.x - layout.bounds().x) as i32
                             - self.padding.left as i32,
                         y: (cursor_position.y - layout.bounds().y) as i32 - self.padding.top as i32,
@@ -321,7 +323,7 @@ where
             }
             Event::Mouse(MouseEvent::WheelScrolled { delta }) => match delta {
                 ScrollDelta::Lines { x, y } => {
-                    editor.action(Action::Scroll {
+                    editor.action(font_system,Action::Scroll {
                         lines: (-y * 6.0) as i32,
                     });
                     status = Status::Captured;
@@ -357,7 +359,7 @@ impl State {
     pub fn new() -> State {
         State {
             is_dragging: false,
-            cache: Mutex::new(SwashCache::new(&crate::FONT_SYSTEM)),
+            cache: Mutex::new(SwashCache::new()),
         }
     }
 }

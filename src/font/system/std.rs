@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{Attrs, AttrsOwned, Font, FontMatches};
+use crate::{Attrs, Font, FontMatches};
 
 #[ouroboros::self_referencing]
 struct FontSystemInner {
@@ -16,7 +16,7 @@ struct FontSystemInner {
     font_cache: Mutex<HashMap<fontdb::ID, Option<Arc<Font<'this>>>>>,
     #[borrows(locale, db)]
     #[not_covariant]
-    font_matches_cache: Mutex<HashMap<AttrsOwned, Arc<FontMatches<'this>>>>,
+    font_matches_cache: Mutex<HashMap<Attrs, Arc<FontMatches<'this>>>>,
 }
 
 /// Access system fonts
@@ -113,7 +113,7 @@ impl FontSystem {
                 .expect("failed to lock font matches cache");
             //TODO: do not create AttrsOwned unless entry does not already exist
             font_matches_cache
-                .entry(AttrsOwned::new(attrs))
+                .entry(attrs.clone())
                 .or_insert_with(|| {
                     #[cfg(not(target_arch = "wasm32"))]
                     let now = std::time::Instant::now();
@@ -131,7 +131,7 @@ impl FontSystem {
 
                     let font_matches = Arc::new(FontMatches {
                         locale: fields.locale,
-                        default_family: fields.db.family_name(&attrs.family).to_string(),
+                        default_family: fields.db.family_name(&attrs.family.as_family()).to_string(),
                         fonts,
                     });
 

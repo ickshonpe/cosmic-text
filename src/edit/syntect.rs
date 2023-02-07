@@ -7,7 +7,7 @@ use syntect::highlighting::{
 };
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
-use crate::{Action, AttrsList, Buffer, Color, Cursor, Edit, Editor, Style, Weight, Wrap};
+use crate::{Action, AttrsList, Buffer, Color, Cursor, Edit, Editor, Style, Weight, Wrap, FontSystem };
 
 pub struct SyntaxSystem {
     pub syntax_set: SyntaxSet,
@@ -27,7 +27,7 @@ impl SyntaxSystem {
 
 /// A wrapper of [`Editor`] with syntax highlighting provided by [`SyntaxSystem`]
 pub struct SyntaxEditor<'a> {
-    editor: Editor<'a>,
+    editor: Editor,
     syntax_system: &'a SyntaxSystem,
     syntax: &'a SyntaxReference,
     theme: &'a Theme,
@@ -42,7 +42,7 @@ impl<'a> SyntaxEditor<'a> {
     ///
     /// Returns None if theme not found
     pub fn new(
-        buffer: Buffer<'a>,
+        buffer: Buffer,
         syntax_system: &'a SyntaxSystem,
         theme_name: &str,
     ) -> Option<Self> {
@@ -69,13 +69,14 @@ impl<'a> SyntaxEditor<'a> {
     #[cfg(feature = "std")]
     pub fn load_text<P: AsRef<Path>>(
         &mut self,
+        font_system: &FontSystem,
         path: P,
-        attrs: crate::Attrs<'a>,
+        attrs: crate::Attrs,
     ) -> io::Result<()> {
         let path = path.as_ref();
 
         let text = fs::read_to_string(path)?;
-        self.editor.buffer_mut().set_text(&text, attrs);
+        self.editor.buffer_mut().set_text(font_system, &text, attrs);
 
         //TODO: re-use text
         self.syntax = match self.syntax_system.syntax_set.find_syntax_for_file(path) {
@@ -115,12 +116,12 @@ impl<'a> SyntaxEditor<'a> {
     }
 }
 
-impl<'a> Edit<'a> for SyntaxEditor<'a> {
-    fn buffer(&self) -> &Buffer<'a> {
+impl<'a> Edit for SyntaxEditor<'a> {
+    fn buffer(&self) -> &Buffer {
         self.editor.buffer()
     }
 
-    fn buffer_mut(&mut self) -> &mut Buffer<'a> {
+    fn buffer_mut(&mut self) -> &mut Buffer {
         self.editor.buffer_mut()
     }
 
@@ -136,7 +137,7 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
         self.editor.set_select_opt(select_opt);
     }
 
-    fn shape_as_needed(&mut self) {
+    fn shape_as_needed(&mut self, font_system: &FontSystem) {
         #[cfg(feature = "std")]
         let now = std::time::Instant::now();
 
@@ -171,11 +172,11 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
             );
 
             let attrs = line.attrs_list().defaults();
-            let mut attrs_list = AttrsList::new(attrs);
+            let mut attrs_list = AttrsList::new(attrs.clone());
             for (style, _, range) in ranges {
                 attrs_list.add_span(
                     range,
-                    attrs
+                    attrs.clone()
                         .color(Color::rgba(
                             style.foreground.r,
                             style.foreground.g,
@@ -201,7 +202,7 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
             line.set_wrap(Wrap::Word);
 
             //TODO: efficiently do syntax highlighting without having to shape whole buffer
-            buffer.line_shape(line_i);
+            buffer.line_shape(font_system,line_i);
 
             let cache_item = (parse_state.clone(), highlight_state.clone());
             if line_i < self.syntax_cache.len() {
@@ -226,7 +227,7 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
             );
         }
 
-        self.editor.shape_as_needed();
+        self.editor.shape_as_needed(font_system);
     }
 
     fn copy_selection(&mut self) -> Option<String> {
@@ -237,22 +238,22 @@ impl<'a> Edit<'a> for SyntaxEditor<'a> {
         self.editor.delete_selection()
     }
 
-    fn insert_string(&mut self, data: &str, attrs_list: Option<AttrsList>) {
-        self.editor.insert_string(data, attrs_list);
+    fn insert_string(&mut self, font_system: &FontSystem, data: &str, attrs_list: Option<AttrsList>) {
+        self.editor.insert_string(font_system, data, attrs_list);
     }
 
-    fn action(&mut self, action: Action) {
-        self.editor.action(action);
+    fn action(&mut self, font_system: &FontSystem, action: Action) {
+        self.editor.action(font_system, action);
     }
 
     /// Draw the editor
     #[cfg(feature = "swash")]
-    fn draw<F>(&self, cache: &mut crate::SwashCache, _color: Color, mut f: F)
+    fn draw<F>(&self, font_system: &FontSystem, cache: &mut crate::SwashCache, _color: Color, mut f: F)
     where
         F: FnMut(i32, i32, u32, u32, Color),
     {
         let size = self.buffer().size();
         f(0, 0, size.0 as u32, size.1 as u32, self.background_color());
-        self.editor.draw(cache, self.foreground_color(), f);
+        self.editor.draw(font_system, cache, self.foreground_color(), f);
     }
 }

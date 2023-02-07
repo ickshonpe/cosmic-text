@@ -9,7 +9,7 @@ fn redraw(window: &mut Window, editor: &mut Editor<'_>, swash_cache: &mut SwashC
     let bg_color = orbclient::Color::rgb(0x34, 0x34, 0x34);
     let font_color = Color::rgb(0xFF, 0xFF, 0xFF);
 
-    editor.shape_as_needed();
+    editor.shape_as_needed(font_system);
     if editor.buffer().redraw() {
         let instant = Instant::now();
 

@@ -3,7 +3,7 @@ use alloc::string::String;
 
 #[cfg(feature = "swash")]
 use crate::Color;
-use crate::{AttrsList, Buffer, Cursor};
+use crate::{AttrsList, Buffer, Cursor, FontSystem};
 
 pub use self::editor::*;
 mod editor;
@@ -78,12 +78,12 @@ pub enum Action {
 }
 
 /// A trait to allow easy replacements of [`Editor`], like `SyntaxEditor`
-pub trait Edit<'a> {
+pub trait Edit {
     /// Get the internal [`Buffer`]
-    fn buffer(&self) -> &Buffer<'a>;
+    fn buffer(&self) -> &Buffer;
 
     /// Get the internal [`Buffer`], mutably
-    fn buffer_mut(&mut self) -> &mut Buffer<'a>;
+    fn buffer_mut(&mut self) -> &mut Buffer;
 
     /// Get the current cursor position
     fn cursor(&self) -> Cursor;
@@ -95,7 +95,7 @@ pub trait Edit<'a> {
     fn set_select_opt(&mut self, select_opt: Option<Cursor>);
 
     /// Shape lines until scroll, after adjusting scroll if the cursor moved
-    fn shape_as_needed(&mut self);
+    fn shape_as_needed(&mut self, font_system: &FontSystem);
 
     /// Copy selection
     fn copy_selection(&mut self) -> Option<String>;
@@ -106,14 +106,14 @@ pub trait Edit<'a> {
 
     /// Insert a string at the current cursor or replacing the current selection with the given
     /// attributes, or with the previous character's attributes if None is given.
-    fn insert_string(&mut self, data: &str, attrs_list: Option<AttrsList>);
+    fn insert_string(&mut self, font_system: &FontSystem, data: &str, attrs_list: Option<AttrsList>);
 
     /// Perform an [Action] on the editor
-    fn action(&mut self, action: Action);
+    fn action(&mut self, font_system: &FontSystem, action: Action);
 
     /// Draw the editor
     #[cfg(feature = "swash")]
-    fn draw<F>(&self, cache: &mut crate::SwashCache, color: Color, f: F)
+    fn draw<F>(&self, font_system: &FontSystem, cache: &mut crate::SwashCache, color: Color, f: F)
     where
         F: FnMut(i32, i32, u32, u32, Color);
 }

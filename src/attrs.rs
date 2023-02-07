@@ -88,11 +88,11 @@ impl FamilyOwned {
 }
 
 /// Text attributes
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Attrs<'a> {
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Attrs {
     //TODO: should this be an option?
     pub color_opt: Option<Color>,
-    pub family: Family<'a>,
+    pub family: FamilyOwned,
     pub monospaced: bool,
     pub stretch: Stretch,
     pub style: Style,
@@ -100,14 +100,14 @@ pub struct Attrs<'a> {
     pub metadata: usize,
 }
 
-impl<'a> Attrs<'a> {
+impl Attrs {
     /// Create a new set of attributes with sane defaults
     ///
     /// This defaults to a regular Sans-Serif font.
     pub fn new() -> Self {
         Self {
             color_opt: None,
-            family: Family::SansSerif,
+            family: FamilyOwned::new(Family::SansSerif),
             monospaced: false,
             stretch: Stretch::Normal,
             style: Style::Normal,
@@ -123,8 +123,8 @@ impl<'a> Attrs<'a> {
     }
 
     /// Set [Family]
-    pub fn family(mut self, family: Family<'a>) -> Self {
-        self.family = family;
+    pub fn family(mut self, family: impl Into<FamilyOwned>) -> Self {
+        self.family = family.into();
         self
     }
 
@@ -178,69 +178,31 @@ impl<'a> Attrs<'a> {
     }
 }
 
-/// An owned version of [`Attrs`]
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct AttrsOwned {
-    //TODO: should this be an option?
-    pub color_opt: Option<Color>,
-    pub family_owned: FamilyOwned,
-    pub monospaced: bool,
-    pub stretch: Stretch,
-    pub style: Style,
-    pub weight: Weight,
-    pub metadata: usize,
-}
-
-impl AttrsOwned {
-    pub fn new(attrs: Attrs) -> Self {
-        Self {
-            color_opt: attrs.color_opt,
-            family_owned: FamilyOwned::new(attrs.family),
-            monospaced: attrs.monospaced,
-            stretch: attrs.stretch,
-            style: attrs.style,
-            weight: attrs.weight,
-            metadata: attrs.metadata,
-        }
-    }
-
-    pub fn as_attrs(&self) -> Attrs {
-        Attrs {
-            color_opt: self.color_opt,
-            family: self.family_owned.as_family(),
-            monospaced: self.monospaced,
-            stretch: self.stretch,
-            style: self.style,
-            weight: self.weight,
-            metadata: self.metadata,
-        }
-    }
-}
 
 /// List of text attributes to apply to a line
 //TODO: have this clean up the spans when changes are made
 #[derive(Eq, PartialEq)]
 pub struct AttrsList {
-    defaults: AttrsOwned,
-    spans: RangeMap<usize, AttrsOwned>,
+    defaults: Attrs,
+    spans: RangeMap<usize, Attrs>,
 }
 
 impl AttrsList {
     /// Create a new attributes list with a set of default [Attrs]
     pub fn new(defaults: Attrs) -> Self {
         Self {
-            defaults: AttrsOwned::new(defaults),
+            defaults,
             spans: RangeMap::new(),
         }
     }
 
     /// Get the default [Attrs]
     pub fn defaults(&self) -> Attrs {
-        self.defaults.as_attrs()
+        self.defaults.clone()
     }
 
     /// Get the current attribute spans
-    pub fn spans(&self) -> Vec<(&Range<usize>, &AttrsOwned)> {
+    pub fn spans(&self) -> Vec<(&Range<usize>, &Attrs)> {
         self.spans.iter().collect()
     }
 
@@ -256,7 +218,7 @@ impl AttrsList {
             return;
         }
 
-        self.spans.insert(range, AttrsOwned::new(attrs));
+        self.spans.insert(range, attrs);
     }
 
     /// Get the attribute span for an index
@@ -265,13 +227,13 @@ impl AttrsList {
     pub fn get_span(&self, index: usize) -> Attrs {
         self.spans
             .get(&index)
-            .map(|v| v.as_attrs())
-            .unwrap_or(self.defaults.as_attrs())
+            .map(|v| v.clone())
+            .unwrap_or(self.defaults.clone())
     }
 
     /// Split attributes list at an offset
     pub fn split_off(&mut self, index: usize) -> Self {
-        let mut new = Self::new(self.defaults.as_attrs());
+        let mut new = Self::new(self.defaults.clone());
         let mut removes = Vec::new();
 
         //get the keys we need to remove or fix.

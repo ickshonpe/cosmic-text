@@ -7,20 +7,20 @@ use unicode_segmentation::UnicodeSegmentation;
 
 #[cfg(feature = "swash")]
 use crate::Color;
-use crate::{Action, Affinity, AttrsList, Buffer, BufferLine, Cursor, Edit, LayoutCursor};
+use crate::{Action, Affinity, AttrsList, Buffer, BufferLine, Cursor, Edit, LayoutCursor, FontSystem };
 
 /// A wrapper of [`Buffer`] for easy editing
-pub struct Editor<'a> {
-    buffer: Buffer<'a>,
+pub struct Editor {
+    buffer: Buffer,
     cursor: Cursor,
     cursor_x_opt: Option<i32>,
     select_opt: Option<Cursor>,
     cursor_moved: bool,
 }
 
-impl<'a> Editor<'a> {
+impl Editor {
     /// Create a new [`Editor`] with the provided [`Buffer`]
-    pub fn new(buffer: Buffer<'a>) -> Self {
+    pub fn new(buffer: Buffer) -> Self {
         Self {
             buffer,
             cursor: Cursor::default(),
@@ -30,10 +30,10 @@ impl<'a> Editor<'a> {
         }
     }
 
-    fn set_layout_cursor(&mut self, cursor: LayoutCursor) {
+    fn set_layout_cursor(&mut self, font_system: &FontSystem, cursor: LayoutCursor) {
         let layout = self
             .buffer
-            .line_layout(cursor.line)
+            .line_layout(font_system, cursor.line)
             .expect("layout not found");
 
         let layout_line = match layout.get(cursor.layout) {
@@ -65,12 +65,12 @@ impl<'a> Editor<'a> {
     }
 }
 
-impl<'a> Edit<'a> for Editor<'a> {
-    fn buffer(&self) -> &Buffer<'a> {
+impl Edit for Editor {
+    fn buffer(&self) -> &Buffer {
         &self.buffer
     }
 
-    fn buffer_mut(&mut self) -> &mut Buffer<'a> {
+    fn buffer_mut(&mut self) -> &mut Buffer {
         &mut self.buffer
     }
 
@@ -89,12 +89,12 @@ impl<'a> Edit<'a> for Editor<'a> {
         }
     }
 
-    fn shape_as_needed(&mut self) {
+    fn shape_as_needed(&mut self, font_system: &FontSystem) {
         if self.cursor_moved {
-            self.buffer.shape_until_cursor(self.cursor);
+            self.buffer.shape_until_cursor(font_system, self.cursor);
             self.cursor_moved = false;
         } else {
-            self.buffer.shape_until_scroll();
+            self.buffer.shape_until_scroll(font_system);
         }
     }
 
@@ -209,7 +209,7 @@ impl<'a> Edit<'a> for Editor<'a> {
         true
     }
 
-    fn insert_string(&mut self, data: &str, attrs_list: Option<AttrsList>) {
+    fn insert_string(&mut self, font_system: &FontSystem, data: &str, attrs_list: Option<AttrsList>) {
         self.delete_selection();
         let mut remaining_split_len = data.len();
         if remaining_split_len == 0 {
@@ -276,7 +276,7 @@ impl<'a> Edit<'a> for Editor<'a> {
         self.cursor.index = self.buffer.lines[self.cursor.line].text().len() - after_len;
     }
 
-    fn action(&mut self, action: Action) {
+    fn action(&mut self, font_system: &FontSystem, action: Action) {
         let old_cursor = self.cursor;
 
         match action {
@@ -330,9 +330,9 @@ impl<'a> Edit<'a> for Editor<'a> {
                     .map(|shape| shape.rtl);
                 if let Some(rtl) = rtl_opt {
                     if rtl {
-                        self.action(Action::Next);
+                        self.action(font_system, Action::Next);
                     } else {
-                        self.action(Action::Previous);
+                        self.action(font_system, Action::Previous);
                     }
                 }
             }
@@ -343,9 +343,9 @@ impl<'a> Edit<'a> for Editor<'a> {
                     .map(|shape| shape.rtl);
                 if let Some(rtl) = rtl_opt {
                     if rtl {
-                        self.action(Action::Previous);
+                        self.action(font_system,Action::Previous);
                     } else {
-                        self.action(Action::Next);
+                        self.action(font_system,Action::Next);
                     }
                 }
             }
@@ -370,7 +370,7 @@ impl<'a> Edit<'a> for Editor<'a> {
                     cursor.glyph = cursor_x as usize; //TODO: glyph x position
                 }
 
-                self.set_layout_cursor(cursor);
+                self.set_layout_cursor(font_system, cursor);
             }
             Action::Down => {
                 //TODO: make this preserve X as best as possible!
@@ -378,7 +378,7 @@ impl<'a> Edit<'a> for Editor<'a> {
 
                 let layout_len = self
                     .buffer
-                    .line_layout(cursor.line)
+                    .line_layout(font_system, cursor.line)
                     .expect("layout not found")
                     .len();
 
@@ -399,18 +399,18 @@ impl<'a> Edit<'a> for Editor<'a> {
                     cursor.glyph = cursor_x as usize; //TODO: glyph x position
                 }
 
-                self.set_layout_cursor(cursor);
+                self.set_layout_cursor(font_system, cursor);
             }
             Action::Home => {
                 let mut cursor = self.buffer.layout_cursor(&self.cursor);
                 cursor.glyph = 0;
-                self.set_layout_cursor(cursor);
+                self.set_layout_cursor(font_system, cursor);
                 self.cursor_x_opt = None;
             }
             Action::End => {
                 let mut cursor = self.buffer.layout_cursor(&self.cursor);
                 cursor.glyph = usize::max_value();
-                self.set_layout_cursor(cursor);
+                self.set_layout_cursor(font_system, cursor);
                 self.cursor_x_opt = None;
             }
             Action::ParagraphStart => {
@@ -424,21 +424,21 @@ impl<'a> Edit<'a> for Editor<'a> {
                 self.buffer.set_redraw(true);
             }
             Action::PageUp => {
-                self.action(Action::Vertical(-self.buffer.size().1));
+                self.action(font_system, Action::Vertical(-self.buffer.size().1));
             }
             Action::PageDown => {
-                self.action(Action::Vertical(self.buffer.size().1));
+                self.action(font_system, Action::Vertical(self.buffer.size().1));
             }
             Action::Vertical(px) => {
                 // TODO more efficient
                 let lines = px / self.buffer.metrics().line_height;
                 if lines < 0 {
                     for _ in 0..-lines {
-                        self.action(Action::Up);
+                        self.action(font_system, Action::Up);
                     }
                 } else if lines > 0 {
                     for _ in 0..lines {
-                        self.action(Action::Down);
+                        self.action(font_system, Action::Down);
                     }
                 }
             }
@@ -452,11 +452,11 @@ impl<'a> Edit<'a> for Editor<'a> {
                     // Filter out special chars (except for tab), use Action instead
                     log::debug!("Refusing to insert control character {:?}", character);
                 } else if character == '\n' {
-                    self.action(Action::Enter);
+                    self.action(font_system, Action::Enter);
                 } else {
                     let mut str_buf = [0u8; 8];
                     let str_ref = character.encode_utf8(&mut str_buf);
-                    self.insert_string(str_ref, None);
+                    self.insert_string(font_system, str_ref, None);
                 }
             }
             Action::Enter => {
@@ -612,9 +612,9 @@ impl<'a> Edit<'a> for Editor<'a> {
                     .map(|shape| shape.rtl);
                 if let Some(rtl) = rtl_opt {
                     if rtl {
-                        self.action(Action::NextWord);
+                        self.action(font_system, Action::NextWord);
                     } else {
-                        self.action(Action::PreviousWord);
+                        self.action(font_system, Action::PreviousWord);
                     }
                 }
             }
@@ -625,9 +625,9 @@ impl<'a> Edit<'a> for Editor<'a> {
                     .map(|shape| shape.rtl);
                 if let Some(rtl) = rtl_opt {
                     if rtl {
-                        self.action(Action::PreviousWord);
+                        self.action(font_system, Action::PreviousWord);
                     } else {
-                        self.action(Action::NextWord);
+                        self.action(font_system, Action::NextWord);
                     }
                 }
             }
@@ -666,10 +666,11 @@ impl<'a> Edit<'a> for Editor<'a> {
 
     /// Draw the editor
     #[cfg(feature = "swash")]
-    fn draw<F>(&self, cache: &mut crate::SwashCache, color: Color, mut f: F)
+    fn draw<F>(&self, font_system: &FontSystem, cache: &mut crate::SwashCache, color: Color, mut f: F)
     where
         F: FnMut(i32, i32, u32, u32, Color),
     {
+
         let font_size = self.buffer.metrics().font_size;
         let line_height = self.buffer.metrics().line_height;
 
@@ -826,7 +827,7 @@ impl<'a> Edit<'a> for Editor<'a> {
                     None => color,
                 };
 
-                cache.with_pixels(cache_key, glyph_color, |x, y, color| {
+                cache.with_pixels(font_system, cache_key,  glyph_color, |x, y, color| {
                     f(x_int + x, line_y + y_int + y, 1, 1, color);
                 });
             }

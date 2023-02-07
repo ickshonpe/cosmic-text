@@ -69,24 +69,24 @@ fn main() {
 
     editor
         .buffer_mut()
-        .set_size(window.width() as i32 - line_x * 2, window.height() as i32);
+        .set_size(&font_system, window.width() as i32 - line_x * 2, window.height() as i32);
 
     let attrs = Attrs::new().monospaced(true).family(Family::Monospace);
-    match editor.load_text(&path, attrs) {
+    match editor.load_text(&font_system, &path, attrs) {
         Ok(()) => (),
         Err(err) => {
             log::error!("failed to load {:?}: {}", path, err);
         }
     }
 
-    let mut swash_cache = SwashCache::new(&font_system);
+    let mut swash_cache = SwashCache::new();
 
     let mut ctrl_pressed = false;
     let mut mouse_x = -1;
     let mut mouse_y = -1;
     let mut mouse_left = false;
     loop {
-        editor.shape_as_needed();
+        editor.shape_as_needed(&font_system);
         if editor.buffer().redraw() {
             let instant = Instant::now();
 

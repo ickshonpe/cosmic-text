@@ -69,7 +69,7 @@ impl<'a> Edit<'a> for ViEditor<'a> {
     }
 
     fn shape_as_needed(&mut self) {
-        self.editor.shape_as_needed()
+        self.editor.shape_as_needed(font_system)
     }
 
     fn copy_selection(&mut self) -> Option<String> {
@@ -137,7 +137,7 @@ impl<'a> Edit<'a> for ViEditor<'a> {
                     'O' => {
                         self.editor.action(Action::Home);
                         self.editor.action(Action::Enter);
-                        self.editor.shape_as_needed(); // TODO: do not require this?
+                        self.editor.shape_as_needed(font_system); // TODO: do not require this?
                         self.editor.action(Action::Up);
                         self.mode = Mode::Insert;
                     }
